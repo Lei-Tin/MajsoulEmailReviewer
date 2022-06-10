@@ -6,21 +6,26 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 import subprocess
 import os
+from os.path import basename
 from config import *
 
 from typing import Tuple
 
-# For email
+# For POP, receiving email
 import poplib
-import smtplib
 from email.parser import Parser
-from email.header import decode_header
+from email.header import Header, decode_header
 from email.utils import parseaddr
 
-LOG_TO_ACTOR = {}
-ADDRESS_TO_LINK = {}
-RECEIVED = []
-SENT = []
+# For SMTP, sending email
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
+
+LINK_TO_ACTOR = {}  # Dictionary mapping email address to actor index
+LINK_TO_ADDRESS = {}  # Maps Link to address
+SENT = {}  # Dictionary that maps from links to email addresses sent
+
 
 def download_log(link: str) -> None:
     """Downloads the json file for the log"""
@@ -51,46 +56,33 @@ def download_log(link: str) -> None:
 
     driver.close()
 
-    print('Download complete')
+    print('Download log complete')
 
 
 def review_log(filename: str, actor: str) -> None:
     """Reviews the log given by filename and actor"""
     # Calls the review.bat file that I have written earlier
-    subprocess.call(['C:\\Users\\leit\\Desktop\\Akochan\\review.bat',
-                     filename,
+    subprocess.call(['C:\\Users\\leit\\Desktop\\WebpageReview\\review.bat',
+                     f'C:\\Users\\leit\\Desktop\\WebpageReview\\Logs\\{filename}',
                      actor])
 
     print('Analysis complete')
 
-def scan_directory() -> None:
-    """Scans current directory and start analyzing all logs that we haven't analyzed yet
 
-    Generates all the logs we want at the moment
+def scan_log_directory() -> set:
+    """Scans current directory and returns the files in the current log directory
     """
 
     files = os.listdir('Logs')
 
-    read = []
+    return set(files)
 
-    with open('read', encoding='UTF8') as f:
-        for line in f:
-            read.append(line.strip())
-
-    newfiles = []
-    for file in files:
-        if file not in read and file[-5:] != '.html':
-            review_log(os.getcwd() + file, LOG_TO_ACTOR[file])
-            newfiles.append(file)
-
-    with open('read', 'w', encoding='UTF8') as f:
-        f.writelines(read + newfiles)
 
 def parse_email() -> None:
     """Parses the email inputs we receive"""
     print('Connecting through POP3')
 
-    email_server = poplib.POP3_SSL(host=POP_SERVER_HOST, port=POP_SERVER_PORT, timeout=300)
+    email_server = poplib.POP3_SSL(host=POP_SERVER_HOST, port=POP_SERVER_PORT, timeout=None)
 
     email_server.user(SENDER_EMAIL)
 
@@ -103,17 +95,27 @@ def parse_email() -> None:
 
     index = len(mails)
 
+    diff = len(mails) - len(LINK_TO_ADDRESS)
+
     # The mails go from index 1 to len(mails), index 0 is nothing
-    for i in range(index, 0, -1):
+    for i in range(index, index - diff, -1):
         resp, lines, octets = email_server.retr(i)
         msg_content = b'\r\n'.join(lines).decode('utf-8')
         msg = Parser().parsestr(msg_content)
 
-        header = parser_email_header(msg)[0].split()
+        subject, email = parser_email_header(msg)
 
-        # if len(header) == 2:
-        #     if header[0][:5] == 'https':
-        print(header)
+        header = subject.split()
+
+        if len(header) == 2:
+            if header[0][:5] == 'https' and header[0] not in SENT:
+                print(f'Parsing email: {header[0]}')
+                LINK_TO_ADDRESS[header[0]] = email
+                LINK_TO_ACTOR[header[0]] = header[1]
+
+    print(f'Number of new emails parsed: {diff}')
+
+    print('Quitting POP3')
 
     email_server.quit()
 
@@ -130,11 +132,73 @@ def parser_email_header(msg) -> Tuple[str, str]:
     return value, addr
 
 
+def send_email(email: str, filename: str) -> None:
+    """Sends the emails with the analysis back to them"""
 
-def send_email() -> None:
-    """Sends the emails needed back to them"""
-    pass
+    print('Connecting through SMTP')
+
+    email_server = smtplib.SMTP_SSL(host=SMTP_SERVER_HOST, port=SMTP_SERVER_PORT, timeout=None)
+
+    email_server.connect(host=SMTP_SERVER_HOST, port=SMTP_SERVER_PORT)
+
+    email_server.login(user=SENDER_EMAIL, password=EMAIL_CODE)
+
+    print('Connected through SMTP')
+
+    message = MIMEMultipart()
+    message['From'] = SENDER_EMAIL
+    message['To'] = email
+    message['Subject'] = Header(f'{filename}', 'utf-8')
+
+    with open(f'./Logs/{filename}', 'rb') as f:
+        att = MIMEApplication(f.read(), Name=basename(filename))
+        att["Content-Type"] = 'application/octet-stream'
+        att["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+    message.attach(att)
+
+    print('Sending email')
+
+    email_server.sendmail(SENDER_EMAIL, email, message.as_string())
+
+    print('Email sent, closing SMTP connection')
+
+    email_server.close()
+
 
 if __name__ == '__main__':
+    while True:
+        parse_email()
 
-    parse_email()
+        with open('sent', 'r', encoding='utf8') as f:
+            for line in f:
+                link, email = line.strip().split(',')
+                SENT[link] = email
+
+        for link in set(LINK_TO_ADDRESS.keys()).difference(set(SENT.keys())):
+            email = LINK_TO_ADDRESS[link]
+            actor_id = LINK_TO_ACTOR[link]
+
+            print(f'Processing {link}, for {email}')
+
+            old_files = scan_log_directory()
+
+            download_log(link)
+
+            new_files = scan_log_directory()
+
+            review_log(new_files.difference(old_files).__iter__().__next__(), actor_id)
+
+            new_analysis_files = scan_log_directory()
+
+            # This is the filename we want to send back
+            filename = new_analysis_files.difference(new_files).__iter__().__next__()
+
+            send_email(email, filename)
+
+            with open('sent', 'a', encoding='utf8') as f:
+                f.write(f'{link},{email}\n')
+
+        # When no logs are being processed, sleep for 300 seconds.
+        print('No more logs to process, sleeping for 5 minutes...')
+        sleep(300)

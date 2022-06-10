@@ -27,7 +27,7 @@ LINK_TO_ADDRESS = {}  # Maps Link to address
 SENT = {}  # Dictionary that maps from links to email addresses sent
 
 
-def download_log(link: str) -> None:
+def download_log(link_to_log: str) -> None:
     """Downloads the json file for the log"""
     options = webdriver.ChromeOptions()
     options.add_argument('user-data-dir=' + USER_DATA_DIR)
@@ -39,7 +39,7 @@ def download_log(link: str) -> None:
 
     driver = webdriver.Chrome(options=options)
 
-    driver.get(link)
+    driver.get(link_to_log)
 
     # Wait for 30 seconds for the log to load, then download it by pressing "s"
     sleep(30)
@@ -59,11 +59,11 @@ def download_log(link: str) -> None:
     print('Download log complete')
 
 
-def review_log(filename: str, actor: str) -> None:
+def review_log(filepath: str, actor: str) -> None:
     """Reviews the log given by filename and actor"""
     # Calls the review.bat file that I have written earlier
     subprocess.call(['C:\\Users\\leit\\Desktop\\WebpageReview\\review.bat',
-                     f'C:\\Users\\leit\\Desktop\\WebpageReview\\Logs\\{filename}',
+                     f'C:\\Users\\leit\\Desktop\\WebpageReview\\Logs\\{filepath}',
                      actor])
 
     print('Analysis complete')
@@ -111,12 +111,12 @@ def parse_email() -> None:
         for head in header:
             head.strip()
 
-        hdr, addr = parseaddr(msg['From'])
+        hdr, address = parseaddr(msg['From'])
 
         if len(header) == 2:
             if header[0][:5] == 'https' and header[0] not in SENT:
                 print(f'Parsing email: {header[0]}')
-                LINK_TO_ADDRESS[header[0]] = addr
+                LINK_TO_ADDRESS[header[0]] = address
                 LINK_TO_ACTOR[header[0]] = header[1]
 
     print(f'Number of new emails parsed: {diff}')
@@ -126,19 +126,7 @@ def parse_email() -> None:
     email_server.quit()
 
 
-def parser_email_header(msg) -> Tuple[str, str]:
-    """Parses the email header and returns the title of the email and the sender's address"""
-    subject = msg['Subject']
-    value, charset = decode_header(subject)[0]
-    if charset:
-        value = value.decode(charset)
-
-    hdr, addr = parseaddr(msg['From'])
-
-    return value, addr
-
-
-def send_email(email: str, filename: str) -> None:
+def send_email(email_addr: str, filename_report: str) -> None:
     """Sends the emails with the analysis back to them"""
 
     print('Connecting through SMTP')
@@ -153,19 +141,19 @@ def send_email(email: str, filename: str) -> None:
 
     message = MIMEMultipart()
     message['From'] = SENDER_EMAIL
-    message['To'] = email
-    message['Subject'] = Header(f'{filename}', 'utf-8')
+    message['To'] = email_addr
+    message['Subject'] = Header(f'{filename_report}', 'utf-8')
 
-    with open(f'./Logs/{filename}', 'rb') as f:
-        att = MIMEApplication(f.read(), Name=basename(filename))
+    with open(f'./Logs/{filename_report}', 'rb') as file:
+        att = MIMEApplication(file.read(), Name=basename(filename_report))
         att["Content-Type"] = 'application/octet-stream'
-        att["Content-Disposition"] = f'attachment; filename="{filename}"'
+        att["Content-Disposition"] = f'attachment; filename="{filename_report}"'
 
     message.attach(att)
 
     print('Sending email')
 
-    email_server.sendmail(SENDER_EMAIL, email, message.as_string())
+    email_server.sendmail(SENDER_EMAIL, email_addr, message.as_string())
 
     print('Email sent, closing SMTP connection')
 
@@ -178,20 +166,22 @@ if __name__ == '__main__':
 
         with open('sent', 'r', encoding='utf8') as f:
             for line in f:
-                link, email = line.strip().split(',')
-                SENT[link] = email
+                link, addr = line.strip().split(',')
+                SENT[link] = addr
 
         for link in set(LINK_TO_ADDRESS.keys()).difference(set(SENT.keys())):
-            email = LINK_TO_ADDRESS[link]
+            addr = LINK_TO_ADDRESS[link]
             actor_id = LINK_TO_ACTOR[link]
 
-            print(f'Processing {link}, for {email}')
+            print(f'Processing {link}, for {addr}')
 
             old_files = scan_log_directory()
 
             download_log(link)
 
             new_files = scan_log_directory()
+
+            print('Starting to review log...')
 
             review_log(new_files.difference(old_files).__iter__().__next__(), actor_id)
 
@@ -200,7 +190,7 @@ if __name__ == '__main__':
             # This is the filename we want to send back
             filename = new_analysis_files.difference(new_files).__iter__().__next__()
 
-            send_email(email, filename)
+            send_email(addr, filename)
 
             with open('sent', 'a', encoding='utf8') as f:
                 f.write(f'{link},{email}\n')

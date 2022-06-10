@@ -62,6 +62,7 @@ def download_log(link: str) -> None:
 def review_log(filename: str, actor: str) -> None:
     """Reviews the log given by filename and actor"""
     # Calls the review.bat file that I have written earlier
+    # Replace the directory here if you wish to run on your own device
     subprocess.call(['C:\\Users\\leit\\Desktop\\WebpageReview\\review.bat',
                      f'C:\\Users\\leit\\Desktop\\WebpageReview\\Logs\\{filename}',
                      actor])

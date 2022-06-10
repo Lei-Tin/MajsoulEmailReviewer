@@ -13,7 +13,7 @@ from typing import Tuple
 
 # For POP, receiving email
 import poplib
-from email.parser import Parser
+import email
 from email.header import Header, decode_header
 from email.utils import parseaddr
 
@@ -62,10 +62,9 @@ def download_log(link: str) -> None:
 def review_log(filename: str, actor: str) -> None:
     """Reviews the log given by filename and actor"""
     # Calls the review.bat file that I have written earlier
-    # Replace the directory here if you wish to run on your own device
-    subprocess.call('C:\\Users\\leit\\Desktop\\WebpageReview\\review.bat ' +
-                    f'"C:\\Users\\leit\\Desktop\\WebpageReview\\Logs\\{filename}" ' +
-                    actor, shell=True)
+    subprocess.call(['C:\\Users\\leit\\Desktop\\WebpageReview\\review.bat',
+                     f'C:\\Users\\leit\\Desktop\\WebpageReview\\Logs\\{filename}',
+                     actor])
 
     print('Analysis complete')
 
@@ -83,7 +82,7 @@ def parse_email() -> None:
     """Parses the email inputs we receive"""
     print('Connecting through POP3')
 
-    email_server = poplib.POP3_SSL(host=POP_SERVER_HOST, port=POP_SERVER_PORT, timeout=None)
+    email_server = poplib.POP3_SSL(host=POP_SERVER_HOST, port=POP_SERVER_PORT, timeout=1000)
 
     email_server.user(SENDER_EMAIL)
 
@@ -101,17 +100,23 @@ def parse_email() -> None:
     # The mails go from index 1 to len(mails), index 0 is nothing
     for i in range(index, index - diff, -1):
         resp, lines, octets = email_server.retr(i)
-        msg_content = b'\r\n'.join(lines).decode('utf-8')
-        msg = Parser().parsestr(msg_content)
+        msg_content = b'\n'.join(lines)
 
-        subject, email = parser_email_header(msg)
+        msg = email.message_from_bytes(msg_content)
+
+        subject = decode_header(msg['Subject'])[0][0]
 
         header = subject.split()
+
+        for head in header:
+            head.strip()
+
+        hdr, addr = parseaddr(msg['From'])
 
         if len(header) == 2:
             if header[0][:5] == 'https' and header[0] not in SENT:
                 print(f'Parsing email: {header[0]}')
-                LINK_TO_ADDRESS[header[0]] = email
+                LINK_TO_ADDRESS[header[0]] = addr
                 LINK_TO_ACTOR[header[0]] = header[1]
 
     print(f'Number of new emails parsed: {diff}')
@@ -138,7 +143,7 @@ def send_email(email: str, filename: str) -> None:
 
     print('Connecting through SMTP')
 
-    email_server = smtplib.SMTP_SSL(host=SMTP_SERVER_HOST, port=SMTP_SERVER_PORT, timeout=None)
+    email_server = smtplib.SMTP_SSL(host=SMTP_SERVER_HOST, port=SMTP_SERVER_PORT, timeout=1000)
 
     email_server.connect(host=SMTP_SERVER_HOST, port=SMTP_SERVER_PORT)
 

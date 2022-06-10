@@ -663,9 +663,11 @@
             }, // anon edit 2
             function (i, record) {
                 let results = parse(record);
+                let dateOptions = {day: '2-digit', month: '2-digit', year: 'numeric'};
+                let timeOptions = {hour12: false, hour: '2-digit', minute: '2-digit'};
                 download(
                     //default filename
-                    ((new Date(record.head.end_time * 1000)).toLocaleString() + "_" + results["rule"]["disp"] + ".json").replace(/[ \/]/g, "_"),
+                    ((new Date(record.head.end_time * 1000)).toLocaleDateString('en', dateOptions) + "_" + (new Date(record.head.end_time * 1000)).toLocaleTimeString('en', timeOptions) + "_" + results["rule"]["disp"] + ".json").replace(/[ \/]/g, "_"),
                     PRETTY ?
                         JSON.stringify(results, null, "    ")
                             .replace(/\n       \s+/g, " ")       //bring up log array items

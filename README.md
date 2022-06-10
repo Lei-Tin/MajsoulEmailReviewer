@@ -25,7 +25,9 @@ A automatic script that receives email input, and sends Akochan's review back to
 
 # Picture while running
 
-![Example running scene]()
+The GIF is a little bit large (40+ MB), so it might take a while to load :3
+
+![Example running scene](https://github.com/Lei-Tin/majsoul-email-reviewer/blob/e8af5199e2bbc12f19a2a3bd2cf9e7ba6cde4061/demo.gif)
 
 # Libraries Used
 

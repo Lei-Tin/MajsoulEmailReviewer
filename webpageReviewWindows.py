@@ -9,8 +9,6 @@ import os
 from os.path import basename
 from config import *
 
-from typing import Tuple
-
 # For POP, receiving email
 import poplib
 import email
@@ -80,15 +78,20 @@ def scan_log_directory() -> set:
 
 def parse_email() -> None:
     """Parses the email inputs we receive"""
-    print('Connecting through POP3')
 
-    email_server = poplib.POP3_SSL(host=POP_SERVER_HOST, port=POP_SERVER_PORT, timeout=1000)
+    while True:
+        try:
+            email_server = poplib.POP3_SSL(host=POP_SERVER_HOST, port=POP_SERVER_PORT, timeout=1000)
+            print('Connecting through POP3')
 
-    email_server.user(SENDER_EMAIL)
+            email_server.user(SENDER_EMAIL)
+            email_server.pass_(EMAIL_CODE)
 
-    email_server.pass_(EMAIL_CODE)
+            print('Connected through POP3')
 
-    print('Connected through POP3')
+            break
+        except (TimeoutError, poplib.error_proto) as e:
+            print('Connection failed! Retrying...')
 
     resp, mails, octets = email_server.list()
     num, total_size = email_server.stat()
@@ -129,15 +132,19 @@ def parse_email() -> None:
 def send_email(email_addr: str, filename_report: str) -> None:
     """Sends the emails with the analysis back to them"""
 
-    print('Connecting through SMTP')
+    while True:
+        try:
+            email_server = smtplib.SMTP_SSL(host=SMTP_SERVER_HOST, port=SMTP_SERVER_PORT,
+                                            timeout=1000)
+            print('Connecting through SMTP')
 
-    email_server = smtplib.SMTP_SSL(host=SMTP_SERVER_HOST, port=SMTP_SERVER_PORT, timeout=1000)
+            email_server.connect(host=SMTP_SERVER_HOST, port=SMTP_SERVER_PORT)
+            email_server.login(user=SENDER_EMAIL, password=EMAIL_CODE)
 
-    email_server.connect(host=SMTP_SERVER_HOST, port=SMTP_SERVER_PORT)
-
-    email_server.login(user=SENDER_EMAIL, password=EMAIL_CODE)
-
-    print('Connected through SMTP')
+            print('Connected through SMTP')
+            break
+        except (TimeoutError, poplib.error_proto) as e:
+            print('Connection failed! Retrying...')
 
     message = MIMEMultipart()
     message['From'] = SENDER_EMAIL

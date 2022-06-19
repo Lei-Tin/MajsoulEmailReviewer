@@ -22,6 +22,7 @@ from email.mime.application import MIMEApplication
 
 LINK_TO_ACTOR = {}  # Dictionary mapping email address to actor index
 LINK_TO_ADDRESS = {}  # Maps Link to address
+LINK_TO_PT = {}  # Maps Link to PT
 SENT = {}  # Dictionary that maps from links to email addresses sent
 
 
@@ -34,6 +35,9 @@ def download_log(link_to_log: str) -> None:
                   'AppleWebKit/537.36 (KHTML, like Gecko) '
                   'Chrome/37.0.2049.0 Safari/537.36')
     options.add_argument(f'user-agent={user_agent}')
+
+    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--ignore-ssl-errors')
 
     driver = webdriver.Chrome(options=options)
 
@@ -57,8 +61,16 @@ def download_log(link_to_log: str) -> None:
     print('Download log complete')
 
 
-def review_log(filepath: str, actor: str) -> None:
+def review_log(filepath: str, actor: str, points: str) -> None:
     """Reviews the log given by filename and actor"""
+    with open('review_tmp.bat', 'r', encoding='UTF8') as tmp_bat:
+        lines = tmp_bat.readlines()
+
+    lines[4] = f'akochan-reviewer.exe -i %1 -a %2 --pt {points} --no-open\n'
+
+    with open('review.bat', 'w', encoding='UTF8') as bat:
+        bat.writelines(lines)
+
     # Calls the review.bat file that I have written earlier
     subprocess.call(['C:\\Users\\leit\\Desktop\\WebpageReview\\review.bat',
                      f'C:\\Users\\leit\\Desktop\\WebpageReview\\Logs\\{filepath}',
@@ -90,11 +102,11 @@ def parse_email() -> None:
             print('Connected through POP3')
 
             break
-        except (TimeoutError, poplib.error_proto) as e:
+        except (TimeoutError, poplib.error_proto, ConnectionResetError) as e:
             print('Connection failed! Retrying...')
 
     resp, mails, octets = email_server.list()
-    num, total_size = email_server.stat()
+    # num, total_size = email_server.stat()
 
     index = len(mails)
 
@@ -116,8 +128,13 @@ def parse_email() -> None:
 
         hdr, address = parseaddr(msg['From'])
 
-        if len(header) == 2:
+        if len(header) >= 2:
             if header[0][:5] == 'https' and header[0] not in SENT:
+                if len(header) == 3:
+                    LINK_TO_PT[header[0]] = header[1]
+                else:
+                    LINK_TO_PT[header[0]] = DEFAULT_PT
+
                 print(f'Parsing email: {header[0]}')
                 LINK_TO_ADDRESS[header[0]] = address
                 LINK_TO_ACTOR[header[0]] = header[1]
@@ -143,7 +160,8 @@ def send_email(email_addr: str, filename_report: str) -> None:
 
             print('Connected through SMTP')
             break
-        except (TimeoutError, poplib.error_proto) as e:
+        except (TimeoutError, poplib.error_proto, ConnectionResetError,
+                smtplib.SMTPServerDisconnected) as e:
             print('Connection failed! Retrying...')
 
     message = MIMEMultipart()
@@ -179,6 +197,7 @@ if __name__ == '__main__':
         for link in set(LINK_TO_ADDRESS.keys()).difference(set(SENT.keys())):
             addr = LINK_TO_ADDRESS[link]
             actor_id = LINK_TO_ACTOR[link]
+            pt = LINK_TO_PT[link]
 
             print(f'Processing {link}, for {addr}')
 
@@ -190,17 +209,26 @@ if __name__ == '__main__':
 
             print('Starting to review log...')
 
-            review_log(new_files.difference(old_files).__iter__().__next__(), actor_id)
+            try:
+                review_log(new_files.difference(old_files).__iter__().__next__(), actor_id, pt)
+            except StopIteration:
+                print('No new file found (Download log)! Perhaps something went wrong?')
+                break
 
             new_analysis_files = scan_log_directory()
 
             # This is the filename we want to send back
-            filename = new_analysis_files.difference(new_files).__iter__().__next__()
+
+            try:
+                filename = new_analysis_files.difference(new_files).__iter__().__next__()
+            except StopIteration:
+                print('No new file found (Analysis file)! Perhaps something went wrong?')
+                break
 
             send_email(addr, filename)
 
             with open('sent', 'a', encoding='utf8') as f:
-                f.write(f'{link},{email}\n')
+                f.write(f'{link},{addr}\n')
 
         # When no logs are being processed, sleep for 300 seconds.
         print('No more logs to process, sleeping for 5 minutes...')

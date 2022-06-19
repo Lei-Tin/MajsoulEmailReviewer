@@ -12,9 +12,9 @@ A automatic script that receives email input, and sends Akochan's review back to
   - Send an email to "xxxxleitinxxxx@163.com", with the subject of the email being:
   - **"{Link to majsoul log} {Player index} \<Optional PT distribution\>"**
   - Player index takes the following format: **{0: 东, 1: 南, 2: 西, 3: 北}**, where the index correspond to the initial location the player is
-  - If provided, Akochan will be called with the pt distribution you specified. By default, it uses **"80,40,0,-80"**, which corresponds to 雀杰1 in 金之间
+  - If provided, Akochan will be called with the pt distribution you specified. By default, it uses **"80,40,0,-80"**, which corresponds to [雀杰1](https://www.zhihu.com/question/474080670) in 金之间, 南风场
   - Pt distribution has to be specified in the format of 
-  - "{1st place pt gain},{2nd place pt gain},{3rd place pt gain}, {4th place pt gain}"
+  - "{1st place pt gain},{2nd place pt gain},{3rd place pt gain},{4th place pt gain}"
   - Example usage of option 2 (Analysis of the game with the player starting at 东, with default PT distribution): 
   - https://game.maj-soul.net/1/?paipu=220619-59f4a3b6-2a44-48f9-a30c-11fcdd24b8eb_a90583244 0
 

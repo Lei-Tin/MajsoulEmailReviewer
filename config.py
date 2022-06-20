@@ -18,4 +18,4 @@ POP_SERVER_PORT = 995
 SMTP_SERVER_PORT = 465
 
 # Akochan reviewer config
-DEFAULT_PT = '80,40,0,-80'
+DEFAULT_PT = '95,45,-5,-95'

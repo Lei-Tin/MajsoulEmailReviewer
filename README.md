@@ -7,7 +7,7 @@ A automatic script that receives email input, and sends Akochan's review back to
 - Option 1: 
   - Clone the whole repository and modify settings in both config.py and webpageReviewWindows.py so that it can be ran in your local machine. 
   - Then, you can send your email anytime to any email you desire
-- Option 2:
+- Option 2 (Unavailable at the moment):
   - Use the public email address and my machine to test out this project.
   - Send an email to "xxxxleitinxxxx@163.com", with the subject of the email being:
   - **"{Link to majsoul log} {Player index} \<Optional PT distribution\>"**
